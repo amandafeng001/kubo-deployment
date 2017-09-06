@@ -44,7 +44,8 @@ main() {
 
   # shellcheck disable=SC1090
   . "$(repo_directory)/bin/lib/deploy_utils" > /dev/null
-  generate_manifest "${bosh_env}" "${deployment_name}" "$(repo_directory)/manifests/kubo.yml" "${director_uuid}"
+  generate_manifest "${bosh_env}" "${deployment_name}" "$(repo_directory)/manifests/pks-kubo.yml" "${director_uuid}"
+ 
 }
 
 [[ "$0" == "${BASH_SOURCE[0]}" ]] && main "$@"

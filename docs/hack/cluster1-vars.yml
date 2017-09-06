@@ -1,0 +1,35 @@
+#this is a sample vars file: to deploy a cluster named 'cluster1', fill in the values and put the cluster1-var.yml under the kubo env path, for example ~/kubo-env/kubo/
+#the network (logical-switch) to deploy your cluster
+cluster_network: ls-2
+# CIDR range the cluster will deploy to
+cluster_internal_cidr: 192.168.114.0/24
+# internal gateway
+cluster_internal_gw: 192.168.114.1
+kubernetes_master_port: 6443
+dns_recursor_ip: 10.162.204.1
+kubo_release_url: https://storage.googleapis.com/kubo-public/kubo-release-latest.tgz
+# IP address that can be used to reach the Kubernetes API, usually the address of a load balancer
+kubernetes_master_host: 192.168.114.51
+worker_haproxy_ip_addresses: 192.168.114.55
+master_target_pool: kubomasters
+# target pool that worker nodes will be a part of
+worker_target_pool: kuboworkers
+worker_haproxy_tcp_frontend_port: 1234
+worker_haproxy_tcp_backend_port: 4321
+# vCenter Host IP
+vcenter_ip: 10.161.110.23
+# vCenter Username
+vcenter_user: "administrator@vsphere.local"
+vcenter_dc: folder-os-test-dc/os-test-dc
+vcenter_vms: kubo
+vcenter_templates: kubo-templates
+vcenter_disks: kubo
+vcenter_ds: nfsStorage-4
+# vCenter Cluster
+vcenter_cluster: os-compute-cluster-1
+# vCenter Resource Pool
+vcenter_rp: kubo
+# Network name to deploy service in your cloud config
+cluster_network_name: ls-2
+cluster_reserved_ips: 192.168.114.0-192.168.114.50
+iaas: vsphere

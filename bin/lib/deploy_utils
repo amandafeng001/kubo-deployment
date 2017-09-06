@@ -18,8 +18,9 @@ get_setting() {
 }
 
 set_cloud_config() {
+  local deployment_name=$1
   local lib_path=$(cd $(dirname ${BASH_SOURCE[0]}); pwd)
-  local cloud_config=$(${lib_path}/../generate_cloud_config ${BOSH_ENV})
+  local cloud_config=$(${lib_path}/../generate_cloud_config ${BOSH_ENV} ${deployment_name})
   echo "$cloud_config" | BOSH_CLIENT=bosh_admin BOSH_CLIENT_SECRET=$(get_bosh_secret)  bosh-cli -n -e "${BOSH_NAME}" update-cloud-config -
 }
 
@@ -121,11 +122,11 @@ generate_manifest() {
     manifest=$(bosh-cli int <(echo "$manifest") --ops-file="${manifest_dir}/ops-files/${iaas}-cloud-provider.yml" -v director_uuid="${director_uuid}")
   fi
 
-  if [ -f "${bosh_environment}/${deployment_name}-vars.yml" ]; then
-    manifest=$(bosh-cli int <(echo "${manifest}") --vars-file="${bosh_environment}/${deployment_name}-vars.yml")
-  fi
+#  if [ -f "${bosh_environment}/${deployment_name}-vars.yml" ]; then
+#    manifest=$(bosh-cli int <(echo "${manifest}") --vars-file="${bosh_environment}/${deployment_name}-vars.yml")
+#  fi
 
-  manifest=$(bosh-cli int <(echo "${manifest}") --vars-file="${bosh_environment}/director.yml" --var=deployment_name="${deployment_name}")
+  manifest=$(bosh-cli int <(echo "${manifest}") --vars-file="${bosh_environment}/${deployment_name}-vars.yml" --var=deployment_name="${deployment_name}")
 
   if [ -f "${bosh_environment}/creds.yml" ]; then
     manifest=$(bosh-cli int <(echo "${manifest}") --vars-file="${bosh_environment}/creds.yml")

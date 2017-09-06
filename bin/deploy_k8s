@@ -69,7 +69,7 @@ main() {
 
   export_bosh_environment "${bosh_env}"
   upload_releases "${release_source}"
-  set_cloud_config
+  set_cloud_config "${deployment_name}"
   manifest=$("$(repo_directory)/bin/generate_kubo_manifest" "${bosh_env}" "${deployment_name}" "$(get_director_uuid)")
   stemcell_version=$(bosh-cli int <(echo -n "${manifest}") --path '/stemcells/0/version')
   upload_stemcell "${release_source}" "${platform}" "${stemcell_version}"

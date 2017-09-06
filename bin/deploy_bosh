@@ -92,6 +92,7 @@ generate_manifest_vsphere() {
     --ops-file "$(repo_directory)/bosh-deployment/misc/powerdns.yml" \
     --ops-file "$(repo_directory)/bosh-deployment/credhub.yml" \
     --ops-file "$(repo_directory)/configurations/generic/bosh-admin-client.yml" \
+    --ops-file "$(repo_directory)/bosh-deployment/jumpbox-user.yml" \
     --vars-file "${bosh_env}/director.yml" \
     --vars-file "${bosh_env}/director-secrets.yml" ${BOSH_EXTRA_OPS}
 }

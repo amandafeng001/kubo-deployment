@@ -6,16 +6,16 @@ azs:
     - clusters: [((vcenter_cluster)): { resource_pool: ((vcenter_rp))}]
 
 networks:
-- name: &cloud_network ((deployments_network))
+- name: &cloud_network ((cluster_network))
   type: manual
   subnets:
-  - range: ((internal_cidr))
-    gateway: ((internal_gw))
-    dns: [((internal_ip))]
+  - range: ((cluster_internal_cidr))
+    gateway: ((cluster_internal_gw))
+    dns: [((dns_recursor_ip))]
     azs: [z1]
     cloud_properties:
-      name: ((network_name))
-    reserved: ((reserved_ips))
+      name: ((cluster_network_name))
+    reserved: ((cluster_reserved_ips))
     static: []
 
 vm_types:
@@ -33,9 +33,9 @@ vm_types:
 
 - name: worker
   cloud_properties:
-    ram: 8192
-    cpu: 4
-    disk: 102400
+    ram: 4096
+    cpu: 2
+    disk: 30720
 
 disk_types:
 - name: 10240
@@ -44,7 +44,7 @@ disk_types:
   disk_size: 5120
 
 compilation:
-  workers: 4
+  workers: 2
   network: *cloud_network
   az: z1
   reuse_compilation_vms: true

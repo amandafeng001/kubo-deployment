@@ -10,6 +10,8 @@ mkdir -p "${kubo_env}"
 
 Then modify the director.yml, in docs/hack/director.yml is a sample manifest for bosh director.
 
+Note: please make sure the network bosh director is deployed to has access to internet. and also the 'dns_recursor_ip' is the dns server ip. In our dev setup on Nimbus, this dns server ip should be the same nameserver ip in your jumphost's /etc/resolv.conf .
+
 # deploy a K8S cluster
 create a file named <cluster-name>-vars.yml
 

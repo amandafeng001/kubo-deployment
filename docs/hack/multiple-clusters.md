@@ -41,7 +41,8 @@ bosh-cli -e kubo login
 We noticed that deploying bosh and kubo on Nimbus takes a long time, mostly because of downloading the packages.
 A work around is to point the urls to a corporate network location. So I downloaded a few packages to my dbc account.
 
-bosh-deployment/bosh.yml, change the bosh url to http://sc-dbc1213.eng.vmware.com/famanda/pks-kubo/bosh-262.3-ubuntu-trusty-3421.9-20170706-183731-831697577-20170706183736.tgz?versionId=7GmwKfufgb5JwWhJ.cwIWLnejOtm2Hu
+bosh-deployment/bosh.yml, change the bosh url to 
+http://sc-dbc1213.eng.vmware.com/famanda/pks-kubo/bosh-262.3-ubuntu-trusty-3421.9-20170706-183731-831697577-20170706183736.tgz
 
 bosh-deployment/uaa.yml, changed the uaa url to
 http://sc-dbc1213.eng.vmware.com/famanda/pks-kubo/uaa-41-ubuntu-trusty-3421.9-20170621-061436-615669844-20170621061441.tgz

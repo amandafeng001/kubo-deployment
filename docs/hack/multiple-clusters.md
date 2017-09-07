@@ -2,10 +2,13 @@ To deploy k8s clusters in different networks:
 # deploy bosh
 This is just a regular way using kubo-deployment to deploy bosh:
 export kubo_env=~/kubo-env
+
 export kubo_env_name=kubo
+
 export kubo_env_path="${kubo_env}/${kubo_env_name}"
 
 mkdir -p "${kubo_env}"
+
 ./bin/generate_env_config "${kubo_env}" ${kubo_env_name} vsphere
 
 Then modify the director.yml, in docs/hack/director.yml is a sample manifest for bosh director.
@@ -24,10 +27,13 @@ Make sure :
  - T0 has SNAT rule maps 'cluster_internal_cidr' to T0's IP (the port which connects to outside). So that VMs in ls-2 can access internet.
 
 export BOSH_CLIENT=admin
+
 export BOSH_CLIENT_SECRET=$(/usr/local/bin/bosh-cli int ~/kubo-env/kubo/creds.yml --path /admin_password)
+
 /usr/local/bin/bosh-cli -e kubo env
 
 bosh-cli -e kubo login
+
 ./bin/deploy_k8s ~/kubo-env/kubo <cluster-name> public
 
 # For speed boost when deploying bosh: 

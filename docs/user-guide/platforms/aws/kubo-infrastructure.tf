@@ -180,18 +180,82 @@ resource "aws_iam_role_policy" "kubo-master" {
     policy = <<EOF
 {
   "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": "ec2:*",
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": "elasticloadbalancing:*",
-      "Resource": "*"
-    }
-  ]
+    "Statement": [
+      {
+        "Sid": "",
+        "Effect": "Allow",
+        "Action": [
+          "ec2:DescribeInstances",
+          "ec2:DescribeRouteTables",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeVolumes"
+        ],
+        "Resource": [
+          "*"
+        ]
+      },
+      {
+        "Sid": "",
+        "Effect": "Allow",
+        "Action": [
+          "ec2:CreateTags",
+          "ec2:ModifyInstanceAttribute",
+          "ec2:CreateSecurityGroup",
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:RevokeSecurityGroupIngress",
+          "ec2:DeleteSecurityGroup",
+          "ec2:CreateRoute",
+          "ec2:DeleteRoute",
+          "ec2:CreateVolume",
+          "ec2:AttachVolume",
+          "ec2:DetachVolume",
+          "ec2:DeleteVolume"
+        ],
+        "Resource": [
+          "*"
+        ]
+      },
+      {
+        "Sid": "",
+        "Effect": "Allow",
+        "Action": [
+          "ec2:DescribeVpcs",
+          "elasticloadbalancing:AddTags",
+          "elasticloadbalancing:AttachLoadBalancerToSubnets",
+          "elasticloadbalancing:ApplySecurityGroupsToLoadBalancer",
+          "elasticloadbalancing:CreateLoadBalancer",
+          "elasticloadbalancing:CreateLoadBalancerPolicy",
+          "elasticloadbalancing:CreateLoadBalancerListeners",
+          "elasticloadbalancing:ConfigureHealthCheck",
+          "elasticloadbalancing:DeleteLoadBalancer",
+          "elasticloadbalancing:DeleteLoadBalancerListeners",
+          "elasticloadbalancing:DescribeLoadBalancers",
+          "elasticloadbalancing:DescribeLoadBalancerAttributes",
+          "elasticloadbalancing:DetachLoadBalancerFromSubnets",
+          "elasticloadbalancing:DeregisterInstancesFromLoadBalancer",
+          "elasticloadbalancing:ModifyLoadBalancerAttributes",
+          "elasticloadbalancing:RegisterInstancesWithLoadBalancer",
+          "elasticloadbalancing:SetLoadBalancerPoliciesForBackendServer",
+          "elasticloadbalancing:AddTags",
+          "elasticloadbalancing:CreateListener",
+          "elasticloadbalancing:CreateTargetGroup",
+          "elasticloadbalancing:DeleteListener",
+          "elasticloadbalancing:DeleteTargetGroup",
+          "elasticloadbalancing:DescribeListeners",
+          "elasticloadbalancing:DescribeLoadBalancerPolicies",
+          "elasticloadbalancing:DescribeTargetGroups",
+          "elasticloadbalancing:DescribeTargetHealth",
+          "elasticloadbalancing:ModifyListener",
+          "elasticloadbalancing:ModifyTargetGroup",
+          "elasticloadbalancing:RegisterTargets",
+          "elasticloadbalancing:SetLoadBalancerPoliciesOfListener"
+        ],
+        "Resource": [
+          "*"
+        ]
+      }
+    ]
 }
 EOF
 }
@@ -229,19 +293,14 @@ resource "aws_iam_role_policy" "kubo-worker" {
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Action": "ec2:Describe*",
+      "Sid": "",
       "Effect": "Allow",
-      "Resource": "*"
-    },
-    {
-      "Action": "ec2:AttachVolume",
-      "Effect": "Allow",
-      "Resource": "*"
-    },
-    {
-      "Action": "ec2:DetachVolume",
-      "Effect": "Allow",
-      "Resource": "*"
+      "Action": [
+        "ec2:DescribeInstances"
+      ],
+      "Resource": [
+        "*"
+      ]
     }
   ]
 }
@@ -290,7 +349,7 @@ resource "aws_instance" "bastion" {
             "sudo apt-get install -y build-essential zlibc zlib1g-dev ruby ruby-dev openssl libxslt-dev libxml2-dev libssl-dev libreadline6 libreadline6-dev libyaml-dev libsqlite3-dev sqlite3",
             "sudo apt-get install -y git",
             "sudo apt-get install -y unzip",
-            "curl -L https://github.com/cloudfoundry-incubator/credhub-cli/releases/download/1.0.0/credhub-linux-1.0.0.tgz | tar zxv && sudo chmod a+x credhub && sudo mv credhub /usr/bin",
+            "curl -L https://github.com/cloudfoundry-incubator/credhub-cli/releases/download/1.3.0/credhub-linux-1.3.0.tgz | tar zxv && sudo chmod a+x credhub && sudo mv credhub /usr/bin",
             "sudo curl -L https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl -o /usr/bin/kubectl && sudo chmod a+x /usr/bin/kubectl",
             "sudo curl https://s3.amazonaws.com/bosh-cli-artifacts/bosh-cli-2.0.27-linux-amd64 -o /usr/bin/bosh-cli && sudo chmod a+x /usr/bin/bosh-cli",
             "sudo wget https://releases.hashicorp.com/terraform/0.10.2/terraform_0.10.2_linux_amd64.zip",
@@ -310,7 +369,8 @@ resource "aws_instance" "bastion" {
             "EOF'",
             "sudo mkdir /share",
             "sudo chown ubuntu:ubuntu /share",
-            "git clone https://github.com/cloudfoundry-incubator/kubo-deployment.git /share/kubo-deployment",
+            "wget https://storage.googleapis.com/kubo-public/kubo-deployment-latest.tgz",
+            "tar -xvf kubo-deployment-latest.tgz -C /share",
             "echo \"${file(var.private_key_filename)}\" > /home/ubuntu/deployer.pem",
             "chmod 600 /home/ubuntu/deployer.pem"
 	]

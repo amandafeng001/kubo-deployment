@@ -2,25 +2,25 @@
   path: /releases/-
   value:
     name: bosh-warden-cpi
-    version: "34"
-    url: https://s3.amazonaws.com/bosh-compiled-release-tarballs/bosh-warden-cpi-34-ubuntu-trusty-3421.9-20170621-054713-292897174-20170621054718.tgz?versionId=nPiYCAltzyFMN8eghQf6.YbkBYQBw9MR
-    sha1: 4bb373ba2331cc5b17fb6fb41921e308caab9222
+    version: "37"
+    url: https://s3.amazonaws.com/bosh-compiled-release-tarballs/bosh-warden-cpi-37-ubuntu-trusty-3468.1-20171027-221318-743840517-20171027221323.tgz?versionId=9fGZxRNJb_GwqMeSeUrbMuptdOaeAAyZ
+    sha1: e74a4931e44e478ad70470643647aa9ab34a61dc
 
 - type: replace
   path: /releases/-
   value:
     name: garden-linux
     version: "0.342.0"
-    url: https://s3.amazonaws.com/bosh-compiled-release-tarballs/garden-linux-0.342.0-ubuntu-trusty-3421.9-20170621-054813-977181521-20170621054819.tgz?versionId=7dtppaaQl0QT56J098jUL4cHCO.kUWfD
-    sha1: 80155df38a2adaeaa31a3b3bf92a78f77d0bba7e
+    url: https://s3.amazonaws.com/bosh-compiled-release-tarballs/garden-linux-0.342.0-ubuntu-trusty-3468.1-20171027-221553-580311474-20171027221558.tgz?versionId=2i9F.5XTtlmQYjtz1C1Qg882ddMjfOAn
+    sha1: 227c2ff42e5eeda8a516cdf38fc018e9686ece3c
 
 - type: replace
   path: /releases/name=os-conf?
   value:
     name: os-conf
-    version: 12
-    url: https://bosh.io/d/github.com/cloudfoundry/os-conf-release?v=12
-    sha1: af5a2c9f228b9d7ec4bd051d71fef0e712fa1549
+    version: 18
+    url: https://bosh.io/d/github.com/cloudfoundry/os-conf-release?v=18
+    sha1: 78d79f08ff5001cc2a24f572837c7a9c59a0e796
 
 - type: replace
   path: /instance_groups/name=bosh/jobs/-
@@ -85,3 +85,7 @@
 - type: replace
   path: /disk_pools/name=disks/disk_size
   value: 65_536
+
+- type: replace
+  path: /variables/name=nats_server_tls/options/alternative_names?/-
+  value: "10.254.50.4"

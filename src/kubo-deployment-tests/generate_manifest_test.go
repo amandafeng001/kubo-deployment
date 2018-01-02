@@ -2,15 +2,16 @@ package kubo_deployment_tests_test
 
 import (
 	"fmt"
+	"io"
 	"os/exec"
 	"path/filepath"
-
-	yaml "gopkg.in/yaml.v2"
+	"strings"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
+	"gopkg.in/yaml.v2"
 )
 
 var _ = Describe("Generate manifest", func() {
@@ -25,53 +26,67 @@ var _ = Describe("Generate manifest", func() {
 		status, err := bash.Run("main", params)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status).NotTo(Equal(0))
+		Expect(status).To(Equal(1))
+		Expect(stdout).To(gbytes.Say("Usage:"))
 	},
 		Entry("no params", []string{}),
 		Entry("single parameter", []string{"a"}),
-		Entry("three parameters", []string{"a", "b", "c"}),
-		Entry("with missing environment", []string{"/missing", "a"}),
+		Entry("two parameters", []string{"a", "b"}),
+		Entry("with missing environment", []string{"/missing", "a", "guid"}),
 	)
 
 	Context("successful manifest generation", func() {
 		kuboEnv := filepath.Join(testEnvironmentPath, "test_gcp")
 
-		DescribeTable("populated properties for CF-based deployment", func(line string) {
+		DescribeTable("populated properties for CF-based deployment", func(yPath, value string) {
 			cfEnv := filepath.Join(testEnvironmentPath, "test_vsphere_with_creds")
-			status, err := bash.Run("main", []string{cfEnv, "klingon", "director_uuid"})
+			status, _ := bash.Run("main", []string{cfEnv, "klingon", "director_uuid"})
 
-			Expect(err).NotTo(HaveOccurred())
 			Expect(status).To(Equal(0))
 
-			Expect(stdout).To(gbytes.Say(line))
+			pathValue, err := propertyFromYaml(yPath, stdout.Contents())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pathValue).To(Equal(value))
 		},
-			Entry("deployment name", "\nname: klingon\n"),
-			Entry("network name", "\n  networks:\n  - name: network-name\n"),
-			Entry("kubernetes API URL", "\n      kubernetes-api-url: https://a.router.name:101928\n"),
-			Entry("kubernetes external port", "\n      external_kubo_port: 101928\n"),
-			Entry("CF API URL", "\n        api_url: cf.api.url\n"),
-			Entry("CF UAA URL", "\n        uaa_url: cf.uaa.url\n"),
-			Entry("CF Client ID", "\n        uaa_client_id: cf.client.id\n"),
-			Entry("CF Client Secret", "\n        uaa_client_secret: cf.client.secret\n"),
-			Entry("Auto-generated kubelet password", "\n      kubelet-password: \\(\\(kubelet-password\\)\\)\n"),
-			Entry("Auto-generated admin password", "\n      admin-password: \\(\\(kubo-admin-password\\)\\)\n"),
+			Entry("deployment name", "/name", "klingon"),
+			Entry("network name", "/instance_groups/name=master/networks/0/name", "default"),
+			Entry("Master node has the etcd job", "/instance_groups/name=master/jobs/name=etcd/release", "kubo-etcd"),
+			Entry("There is only one master node", "/instance_groups/name=master/instances", "1"),
+			Entry("kubernetes external port", "/instance_groups/name=master/jobs/name=kubernetes-api-route-registrar/properties/external_kubo_port", "101928"),
+			Entry("CF API URL", "/instance_groups/name=master/jobs/name=kubernetes-api-route-registrar/properties/cloud_foundry/api_url", "cf.api.url"),
+			Entry("CF UAA URL", "/instance_groups/name=master/jobs/name=kubernetes-api-route-registrar/properties/cloud_foundry/uaa_url", "cf.uaa.url"),
+			Entry("CF Client ID", "/instance_groups/name=master/jobs/name=kubernetes-api-route-registrar/properties/cloud_foundry/uaa_client_id", "cf.client.id"),
+			Entry("CF Client Secret", "/instance_groups/name=master/jobs/name=kubernetes-api-route-registrar/properties/cloud_foundry/uaa_client_secret", "cf.client.secret"),
+			Entry("Auto-generated kubelet password", "/instance_groups/name=master/jobs/name=kube-apiserver/properties/kubelet-password", "((kubelet-password))"),
+			Entry("Auto-generated admin password", "/instance_groups/name=master/jobs/name=kube-apiserver/properties/admin-password", "((kubo-admin-password))"),
 		)
 
-		DescribeTable("populated properties for IaaS-based deployment", func(line string) {
+		DescribeTable("populated properties for IaaS-based deployment", func(yPath, value string) {
+			status, _ := bash.Run("main", []string{kuboEnv, "grinder", "director_uuid"})
+
+			Expect(status).To(Equal(0))
+
+			pathValue, err := propertyFromYaml(yPath, stdout.Contents())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pathValue).To(Equal(value))
+		},
+			Entry("deployment name", "/name", "grinder"),
+			Entry("network name", "/instance_groups/name=master/networks/0/name", "default"),
+			Entry("Auto-generated kubelet password", "/instance_groups/name=master/jobs/name=kube-apiserver/properties/kubelet-password", "((kubelet-password))"),
+			Entry("Auto-generated admin password", "/instance_groups/name=master/jobs/name=kube-apiserver/properties/admin-password", "((kubo-admin-password))"),
+			Entry("worker node tag", "/instance_groups/name=master/jobs/name=cloud-provider/properties/cloud-provider/gce/worker-node-tag", "TheDirector-grinder-worker"),
+		)
+
+		It("should always use dns addresses", func() {
 			status, err := bash.Run("main", []string{kuboEnv, "grinder", "director_uuid"})
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status).To(Equal(0))
 
-			Expect(stdout).To(gbytes.Say(line))
-		},
-			Entry("deployment name", "\nname: grinder\n"),
-			Entry("network name", "\n  networks:\n  - name: network-name\n"),
-			Entry("kubernetes API URL", "\n      kubernetes-api-url: https://12\\.23\\.34\\.45:101928\n"),
-			Entry("Auto-generated kubelet password", "\n      kubelet-password: \\(\\(kubelet-password\\)\\)\n"),
-			Entry("Auto-generated admin password", "\n      admin-password: \\(\\(kubo-admin-password\\)\\)\n"),
-			Entry("worker node tag", "\n          worker-node-tag: TheDirector-grinder-worker"),
-		)
+			pathValue, err := propertyFromYaml("/features/use_dns_addresses", stdout.Contents())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pathValue).To(Equal("true"))
+		})
 
 		It("should include a variable section with tls-kubelet, tls-kubernetes", func() {
 			status, err := bash.Run("main", []string{kuboEnv, "cucumber", "director_uuid"})
@@ -79,6 +94,45 @@ var _ = Describe("Generate manifest", func() {
 			Expect(status).To(Equal(0))
 
 			Expect(stdout).To(gbytes.Say("variables:"))
+			Expect(stdout).To(gbytes.Say("tls-kubelet"))
+			Expect(stdout).To(gbytes.Say("tls-kubernetes"))
+		})
+
+		It("should include an alternative name with master.kubo for the tls-kubernetes variable", func() {
+			status, err := bash.Run("main", []string{kuboEnv, "cucumber", "director_uuid"})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(status).To(Equal(0))
+
+			Expect(stdout).To(gbytes.Say("variables:"))
+			Expect(stdout).To(gbytes.Say("tls-kubernetes"))
+			Expect(stdout).To(gbytes.Say("alternative_names:"))
+			Expect(stdout).To(gbytes.Say("master.kubo"))
+		})
+
+		It("should default the authorization mode property to ABAC", func() {
+			status, err := bash.Run("main", []string{kuboEnv, "cucumber", "director_uuid"})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(status).To(Equal(0))
+
+			Expect(stdout).To(gbytes.Say("authorization-mode: abac"))
+		})
+
+		It("should use the abac authorization mode set in the kubo environment", func() {
+			abacEnv := filepath.Join(testEnvironmentPath, "test_gcp_abac")
+			status, err := bash.Run("main", []string{abacEnv, "cucumber", "director_uuid"})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(status).To(Equal(0))
+
+			Expect(stdout).To(gbytes.Say("authorization-mode: abac"))
+		})
+
+		It("should use the rbac authorization mode set in the kubo environment", func() {
+			rbacEnv := filepath.Join(testEnvironmentPath, "test_gcp_rbac")
+			status, err := bash.Run("main", []string{rbacEnv, "cucumber", "director_uuid"})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(status).To(Equal(0))
+
+			Expect(stdout).To(gbytes.Say("authorization-mode: rbac"))
 		})
 
 		It("should reproduce the same manifest on the second run", func() {
@@ -122,7 +176,7 @@ var _ = Describe("Generate manifest", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status).To(Equal(0))
 
-			Expect(stdout).To(gbytes.Say("\n        uaa_client_secret: \\(\\(routing-cf-client-secret\\)\\)\n"))
+			Expect(stdout).To(gbytes.Say("\n        uaa_client_secret: \\(\\(routing_cf_client_secret\\)\\)\n"))
 		})
 
 		It("uses ops-files to modify the manifest", func() {
@@ -169,6 +223,73 @@ var _ = Describe("Generate manifest", func() {
 			Expect(status).To(Equal(0))
 			Expect(stdout).To(gbytes.Say("\n      kubelet-password: Shields up, ancient life!\n"))
 		})
+
+		It("should not embed addons-specs if not specified in the director", func() {
+			status, err := bash.Run("main", []string{kuboEnv, "grinder", "director_uuid"})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(status).To(Equal(0))
+
+			pathValue, err := propertyFromYaml("/instance_groups/name=master/jobs/name=apply-specs", stdout.Contents())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Expected to find exactly one matching array item for path '/instance_groups/name=master/jobs/name=apply-specs' but found 0"))
+			Expect(pathValue).To(Equal(""))
+		})
+
+		It("should embed addons-specs", func() {
+			opsfileEnv := filepath.Join(testEnvironmentPath, "with_addons")
+			status, err := bash.Run("main", []string{opsfileEnv, "name", "director_uuid"})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(status).To(Equal(0))
+			pathValue, err := propertyFromYaml("/instance_groups/name=master/jobs/name=apply-specs/properties/addons-spec", stdout.Contents())
+
+			Expect(pathValue).To(Equal("|-\n  valid:\n    key: value"))
+		})
+
+		It("should create 3 worker nodes", func() {
+			status, _ := bash.Run("main", []string{kuboEnv, "grinder", "director_uuid"})
+
+			Expect(status).To(Equal(0))
+
+			pathValue, err := propertyFromYaml("/instance_groups/name=worker/instances", stdout.Contents())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pathValue).To(Equal("3"))
+		})
+
+		It("should not contain GCE service key properties", func() {
+			status, _ := bash.Run("main", []string{kuboEnv, "grinder", "director_uuid"})
+
+			Expect(status).To(Equal(0))
+
+			_, err := propertyFromYaml("/instance_groups/name=worker/jobs/name=cloud-provider/properties/cloud-provider/gce/service_key",
+				stdout.Contents())
+			Expect(err).To(HaveOccurred())
+
+			_, err = propertyFromYaml("/instance_groups/name=master/jobs/name=cloud-provider/properties/cloud-provider/gce/service_key",
+				stdout.Contents())
+			Expect(err).To(HaveOccurred())
+		})
+
+	})
+
+	It("errors out if addons_spec file is missing", func() {
+		noAddonsEnv := filepath.Join(testEnvironmentPath, "absent_addons_spec_failing")
+		status, err := bash.Run("main", []string{noAddonsEnv, "coaster", "director_uuid"})
+
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(status).NotTo(Equal(0))
+		Expect(strings.Contains(string(stderr.Contents()), "No file exists")).To(BeTrue())
+	})
+
+	It("errors out if addons_spec file is not valid yaml", func() {
+		invalidAddonsEnv := filepath.Join(testEnvironmentPath, "invalid_addons_spec_failing")
+		status, err := bash.Run("main", []string{invalidAddonsEnv, "coaster", "director_uuid"})
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status).NotTo(Equal(0))
+		Expect(strings.Contains(string(stderr.Contents()), "Invalid yaml")).To(BeTrue())
 	})
 
 	It("expands the bosh environment path to absolute value", func() {
@@ -208,9 +329,13 @@ var _ = Describe("Generate manifest", func() {
 	It("should generate a valid manifest", func() {
 		files, _ := filepath.Glob(testEnvironmentPath + "/*")
 		for _, env := range files {
+			if strings.Contains(env, "_failing") {
+				continue
+			}
 			command := exec.Command("./bin/generate_kubo_manifest", env, "env-name", "director_uuid")
 			out := gbytes.NewBuffer()
-			command.Stdout = out
+			command.Stdout = bash.Stdout
+			command.Stderr = bash.Stderr
 			command.Dir = pathFromRoot("")
 			Expect(command.Run()).To(Succeed())
 
@@ -223,6 +348,9 @@ var _ = Describe("Generate manifest", func() {
 	It("should not write anything to stderr", func() {
 		files, _ := filepath.Glob(testEnvironmentPath + "/*")
 		for _, env := range files {
+			if strings.Contains(env, "_failing") {
+				continue
+			}
 			command := exec.Command("./bin/generate_kubo_manifest", env, "env-name", "director_uuid")
 			errBuffer := gbytes.NewBuffer()
 			command.Stdout = GinkgoWriter
@@ -231,5 +359,143 @@ var _ = Describe("Generate manifest", func() {
 			Expect(command.Run()).To(Succeed(), fmt.Sprintf("Failed with environmenrt %s", env))
 			Expect(string(errBuffer.Contents())).To(HaveLen(0))
 		}
+	})
+
+	It("should set the tls-kubernetes common_name to the kubernetes_master_host", func() {
+		command := exec.Command("./bin/generate_kubo_manifest", "src/kubo-deployment-tests/resources/environments/test_external", "name", "director_uuid")
+
+		stdoutTemp := gbytes.NewBuffer()
+		stderrTemp := gbytes.NewBuffer()
+
+		command.Stdout = io.MultiWriter(stdoutTemp, GinkgoWriter)
+		command.Stderr = io.MultiWriter(stderrTemp, GinkgoWriter)
+		command.Dir = pathFromRoot("")
+		Expect(command.Run()).To(Succeed())
+
+		command2 := exec.Command("bosh-cli", "int", "-", "--path", "/variables/name=tls-kubernetes/options/common_name")
+		command2.Stdin = stdoutTemp
+		command2.Stdout = bash.Stdout
+		command2.Stderr = bash.Stderr
+
+		Expect(command2.Run()).To(Succeed())
+		Expect(stdout).To(gbytes.Say("12.23.34.45"))
+	})
+
+	It("should add the kubernetes_master_host to tls-kubernetes alternative_names", func() {
+		command := exec.Command("./bin/generate_kubo_manifest", "src/kubo-deployment-tests/resources/environments/test_external", "name", "director_uuid")
+
+		stdoutTemp := gbytes.NewBuffer()
+		stderrTemp := gbytes.NewBuffer()
+
+		command.Stdout = io.MultiWriter(stdoutTemp, GinkgoWriter)
+		command.Stderr = io.MultiWriter(stderrTemp, GinkgoWriter)
+		command.Dir = pathFromRoot("")
+		Expect(command.Run()).To(Succeed())
+
+		command2 := exec.Command("bosh-cli", "int", "-", "--path", "/variables/name=tls-kubernetes/options/alternative_names")
+		command2.Stdin = stdoutTemp
+		command2.Stdout = bash.Stdout
+		command2.Stderr = bash.Stderr
+
+		Expect(command2.Run()).To(Succeed())
+		Expect(stdout).To(gbytes.Say("- 12.23.34.45"))
+	})
+
+	It("should set the worker_count to 5 creates 5 worker nodes", func() {
+		command := exec.Command("./bin/generate_kubo_manifest", "src/kubo-deployment-tests/resources/environments/test_gcp_with_5_workers", "name", "director_uuid")
+		command.Stdout = bash.Stdout
+		command.Stderr = bash.Stderr
+		command.Dir = pathFromRoot("")
+		Expect(command.Run()).To(Succeed())
+
+		value, err := propertyFromYaml("/instance_groups/name=worker/instances", stdout.Contents())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(value).To(Equal("5"))
+	})
+
+	Context("when there are no resource pools for vcenter", func() {
+		It("should set working dir to not include the director uuid", func() {
+			command := exec.Command("./bin/generate_kubo_manifest",
+				"src/kubo-deployment-tests/resources/environments/test_vsphere_no_rp",
+				"name", "director_uuid")
+			command.Stdout = bash.Stdout
+			command.Stderr = bash.Stderr
+			command.Dir = pathFromRoot("")
+			Expect(command.Run()).To(Succeed())
+
+			value, err := propertyFromYaml("/instance_groups/name=master/jobs/name=cloud-provider/properties/cloud-provider/vsphere/working-dir",
+				stdout.Contents())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(value).To(Equal("/big_data_center/vm/big_vms"))
+
+			value, err = propertyFromYaml("/instance_groups/name=worker/jobs/name=cloud-provider/properties/cloud-provider/vsphere/working-dir",
+				stdout.Contents())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(value).To(Equal("/big_data_center/vm/big_vms"))
+		})
+	})
+
+	Context("when there are resource pools for vcenter", func() {
+		It("should set working dir to include the director uuid", func() {
+			command := exec.Command("./bin/generate_kubo_manifest",
+				"src/kubo-deployment-tests/resources/environments/test_vsphere",
+				"name", "director_uuid")
+			command.Stdout = bash.Stdout
+			command.Stderr = bash.Stderr
+			command.Dir = pathFromRoot("")
+			Expect(command.Run()).To(Succeed())
+
+			value, err := propertyFromYaml("/instance_groups/name=master/jobs/name=cloud-provider/properties/cloud-provider/vsphere/working-dir",
+				stdout.Contents())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(value).To(Equal("/big_data_center/vm/big_vms/director_uuid"))
+
+			value, err = propertyFromYaml("/instance_groups/name=worker/jobs/name=cloud-provider/properties/cloud-provider/vsphere/working-dir",
+				stdout.Contents())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(value).To(Equal("/big_data_center/vm/big_vms/director_uuid"))
+		})
+	})
+
+	Context("when there are gcp services keys in director.yml", func() {
+		It("should verify that the manifest has service_key properties", func() {
+			command := exec.Command("./bin/generate_kubo_manifest",
+				"src/kubo-deployment-tests/resources/environments/test_gcp_with_service_key",
+				"name", "director_uuid")
+			command.Stdout = bash.Stdout
+			command.Stderr = bash.Stderr
+			command.Dir = pathFromRoot("")
+			Expect(command.Run()).To(Succeed())
+
+			value, err := propertyFromYaml("/instance_groups/name=worker/jobs/name=cloud-provider/properties/cloud-provider/gce/service_key",
+				stdout.Contents())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(value).To(Equal("bar"))
+
+			value, err = propertyFromYaml("/instance_groups/name=master/jobs/name=cloud-provider/properties/cloud-provider/gce/service_key",
+				stdout.Contents())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(value).To(Equal("foo"))
+		})
+
+		Context("And there are gcp service accounts in director.yml", func() {
+			It("should ignore the service keys", func() {
+				command := exec.Command("./bin/generate_kubo_manifest",
+					"src/kubo-deployment-tests/resources/environments/test_gcp_with_service_key_and_service_account",
+					"name", "director_uuid")
+				command.Stdout = bash.Stdout
+				command.Stderr = bash.Stderr
+				command.Dir = pathFromRoot("")
+				Expect(command.Run()).To(Succeed())
+
+				_, err := propertyFromYaml("/instance_groups/name=worker/jobs/name=cloud-provider/properties/cloud-provider/gce/service_key",
+					stdout.Contents())
+				Expect(err).To(HaveOccurred())
+
+				_, err = propertyFromYaml("/instance_groups/name=master/jobs/name=cloud-provider/properties/cloud-provider/gce/service_key",
+					stdout.Contents())
+				Expect(err).To(HaveOccurred())
+			})
+		})
 	})
 })

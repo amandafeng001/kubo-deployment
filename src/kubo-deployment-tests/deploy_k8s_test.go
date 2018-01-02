@@ -1,19 +1,18 @@
 package kubo_deployment_tests_test
 
 import (
+	"fmt"
 	"path"
 
 	. "github.com/jhvhs/gob-mock"
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 )
 
 var _ = Describe("Deploy K8s", func() {
-	validGcpEnvironment := path.Join(testEnvironmentPath, "test_gcp")
-	validvSphereEnvironment := path.Join(testEnvironmentPath, "test_vsphere")
-	validOpenstackEnvironment := path.Join(testEnvironmentPath, "test_openstack")
-	validAWSEnvironment := path.Join(testEnvironmentPath, "test_aws")
+	validGcpEnvironment := path.Join(testEnvironmentPath, "test_gcp_with_creds")
 
 	BeforeEach(func() {
 		bash.Source(pathToScript("deploy_k8s"), nil)
@@ -28,7 +27,7 @@ var _ = Describe("Deploy K8s", func() {
 		})
 	})
 
-	Context("default", func() {
+	Context("When release source is empty", func() {
 		It("deploys with local release", func() {
 			code, err := bash.Run("main", []string{validGcpEnvironment, "deployment"})
 			Expect(err).NotTo(HaveOccurred())
@@ -37,69 +36,69 @@ var _ = Describe("Deploy K8s", func() {
 		})
 	})
 
-	Context("skip", func() {
-		It("deploys with skip upload successfully", func() {
-			code, err := bash.Run("main", []string{validGcpEnvironment, "deployment", "skip"})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(code).To(Equal(0))
+	Context("Artefact upload", func() {
+		BeforeEach(func() {
+			uploadMock := Spy("upload_artefacts")
+			ApplyMocks(bash, []Gob{uploadMock})
 		})
 
-		It("does not upload the stemcell", func() {
-			code, err := bash.Run("main", []string{validGcpEnvironment, "deployment", "skip"})
+		DescribeTable("valid upload sources", func(source string) {
+			code, err := bash.Run("main", []string{validGcpEnvironment, "deployment", source})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(code).To(Equal(0))
+			uploadInvocation := fmt.Sprintf("upload_artefacts %s %s", validGcpEnvironment, source)
+			Expect(stderr).To(gbytes.Say(uploadInvocation))
+		},
+			Entry("local", "local"),
+			Entry("dev", "dev"),
+			Entry("public", "public"),
+		)
 
-			Expect(stderr).NotTo(gbytes.Say("bosh-cli upload-stemcell"))
+		Context("when skip is given", func() {
+			It("skips the upload", func() {
+				code, err := bash.Run("main", []string{validGcpEnvironment, "deployment", "skip"})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(code).To(Equal(0))
+				Expect(stderr).NotTo(gbytes.Say("upload_artefacts"))
+
+			})
 		})
+
 	})
 
-	Context("local", func() {
-		It("deploys with local upload successfully", func() {
-			code, err := bash.Run("main", []string{validGcpEnvironment, "deployment", "local"})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(code).To(Equal(0))
-			Expect(stderr).To(gbytes.Say("bosh-cli upload-release kubo-release.tgz"))
-		})
+	It("Should export bosh env, set cloud config and deploy", func() {
+		cloudConfigMock := Mock("set_cloud_config", "echo")
+		exportBoshEnvironmentMock := Mock("export_bosh_environment", "echo")
+		deployToBoshMock := Mock("deploy_to_bosh", "echo")
+		ApplyMocks(bash, []Gob{cloudConfigMock, exportBoshEnvironmentMock, deployToBoshMock})
 
-		It("uploads the stemcell successfully for GCP", func() {
-			boshMock := MockOrCallThrough("bosh-cli", `echo -n "3124.12"`, `[ "$1" == 'int' ] && [ ! "$4" == '/stemcells/0/version' ] `)
+		depsMock := Mock("get_deps", "echo")
+		ApplyMocks(bash, []Gob{depsMock})
+
+		code, err := bash.Run("main", []string{validGcpEnvironment, "deployment", "skip"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(code).To(Equal(0))
+		Expect(stderr).To(gbytes.Say("export_bosh_environment"))
+		Expect(stderr).To(gbytes.Say("set_cloud_config"))
+		Expect(stderr).To(gbytes.Say("deploy_to_bosh"))
+	})
+
+	Context("When apply-specs is present in the manifest", func() {
+		It("should run apply-specs errand", func() {
+			cloudConfigMock := Mock("set_cloud_config", "echo")
+			exportBoshEnvironmentMock := Mock("export_bosh_environment", "echo")
+			deployToBoshMock := Mock("deploy_to_bosh", "echo")
+			ApplyMocks(bash, []Gob{cloudConfigMock, exportBoshEnvironmentMock, deployToBoshMock})
+
+			depsMock := Mock("get_deps", "echo")
+			ApplyMocks(bash, []Gob{depsMock})
+			boshMock := MockOrCallThrough("bosh-cli", `echo -n "0"`, `! [[ "$4" =~ 'apply-specs' ]]`)
 			ApplyMocks(bash, []Gob{boshMock})
 
-			code, err := bash.Run("main", []string{validGcpEnvironment, "deployment", "local"})
+			code, err := bash.Run("main", []string{validGcpEnvironment, "deployment", "skip"})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(code).To(Equal(0))
-
-			Expect(stderr).To(gbytes.Say("bosh-cli upload-stemcell https://s3.amazonaws.com/bosh-core-stemcells/google/bosh-stemcell-3124.12-google-kvm-ubuntu-trusty-go_agent.tgz"))
-		})
-
-		It("uploads the stemcell successfully for vSphere", func() {
-			boshMock := MockOrCallThrough("bosh-cli", `echo -n "3124.12"`, `[ "$1" == 'int' ] && [ ! "$4" == '/stemcells/0/version' ] `)
-			ApplyMocks(bash, []Gob{boshMock})
-			code, err := bash.Run("main", []string{validvSphereEnvironment, "deployment", "local"})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(code).To(Equal(0))
-
-			Expect(stderr).To(gbytes.Say("bosh-cli upload-stemcell https://s3.amazonaws.com/bosh-core-stemcells/vsphere/bosh-stemcell-3124.12-vsphere-esxi-ubuntu-trusty-go_agent.tgz"))
-		})
-
-		It("uploads the stemcell successfully for OpenStack", func() {
-			boshMock := MockOrCallThrough("bosh-cli", `echo -n "3124.12"`, `[ "$1" == 'int' ] && [ ! "$4" == '/stemcells/0/version' ] `)
-			ApplyMocks(bash, []Gob{boshMock})
-			code, err := bash.Run("main", []string{validOpenstackEnvironment, "deployment", "local"})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(code).To(Equal(0))
-
-			Expect(stderr).To(gbytes.Say("bosh-cli upload-stemcell https://s3.amazonaws.com/bosh-core-stemcells/openstack/bosh-stemcell-3124.12-openstack-kvm-ubuntu-trusty-go_agent.tgz"))
-		})
-
-		It("uploads the stemcell successfully for AWS", func() {
-			boshMock := MockOrCallThrough("bosh-cli", `echo -n "3124.12"`, `[ "$1" == 'int' ] && [ ! "$4" == '/stemcells/0/version' ] `)
-			ApplyMocks(bash, []Gob{boshMock})
-			code, err := bash.Run("main", []string{validAWSEnvironment, "deployment", "local"})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(code).To(Equal(0))
-
-			Expect(stderr).To(gbytes.Say("bosh-cli upload-stemcell https://s3.amazonaws.com/bosh-aws-light-stemcells/light-bosh-stemcell-3124.12-aws-xen-hvm-ubuntu-trusty-go_agent.tgz"))
+			Expect(stderr).To(gbytes.Say("run-errand apply-specs"))
 		})
 	})
 })
